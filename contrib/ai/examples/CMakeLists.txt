@@ -3,4 +3,5 @@
 # add_subdirectory(rl-tcp)
 # add_subdirectory(lte-cqi)
 add_subdirectory(nr-ai-mac)
+add_subdirectory(nr-rl)
 # add_subdirectory(wifi-ai-mac)
