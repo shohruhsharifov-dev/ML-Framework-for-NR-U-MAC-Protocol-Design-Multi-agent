@@ -58,7 +58,8 @@ public:
 
   virtual double ChangeTxPower (double txPower, uint16_t ap_num) = 0;
   virtual uint8_t ChangeMcs (uint8_t mcs, uint16_t ap_num) = 0;
-  
+  virtual uint16_t ChangeNumerology (uint16_t numerology, uint16_t ap_num) = 0;
+
 
   // OpenGym interface
   Ptr<OpenGymSpace> GetActionSpace() override;
@@ -88,7 +89,7 @@ class NrRlTimeStepEnv : public NrRlEnv
 {
 public:
   // NrMacTimeStepEnv ();
-  NrRlTimeStepEnv (uint32_t num_ap, uint32_t trafficType, std::vector<uint32_t> udpLambda, uint32_t packetSize);
+  NrRlTimeStepEnv (uint32_t num_ap);
   ~NrRlTimeStepEnv() override;
 
   virtual void GiveThroughput (double throughput, uint16_t ap_num);
