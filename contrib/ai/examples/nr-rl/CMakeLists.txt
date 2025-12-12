@@ -1,0 +1,20 @@
+build_lib_example(
+  NAME nr-rl-lib
+    SOURCE_FILES
+      nr-rl.cc
+      nr-rl-env.cc
+    LIBRARIES_TO_LINK
+      ${libcore}
+      ${libnetwork}
+      ${libinternet}
+      ${libmobility}
+      ${libapplications}
+      ${libpoint-to-point}
+      ${libflow-monitor}
+      ${libnr}
+      ${libantenna}
+      ${libai}
+      ${libbuildings}
+      ${libconfig-store}
+      ${libinternet-apps}
+)

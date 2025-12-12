@@ -280,7 +280,7 @@ NrMacTimeStepEnv::GetObservation()
   }
   for (uint32_t i = 0; i < 6; i++)
   {
-    observationBox->AddValue(m_trafficType[i]);
+    observationBox->AddValue(m_trafficType[i]); 
   }
   for (uint32_t i = 0; i < 6; i++)
   {

@@ -22,6 +22,7 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <filesystem>
 
 #include "ns3/log.h"
 #include "ns3/core-module.h"
@@ -1260,7 +1261,7 @@ main (int argc, char *argv[])
     bool doubleTechnology = false;
     bool positioning = true;
 
-    std::string pathlossDir = "../../../../../freespacePL/"; //main directory where pathloss Matrix is stored
+    std::string pathlossDir = "freespacePL/"; //main directory where pathloss Matrix is stored
 
     //Physical parameters
     bool cellScan = true;
@@ -2149,6 +2150,10 @@ main (int argc, char *argv[])
 
         std::ifstream inFile;
         
+        NS_LOG_DEBUG("filenameIndexAp = " << filenameIndexAp.str());
+
+        NS_LOG_DEBUG("Current working directory: " << std::filesystem::current_path());
+
         inFile.open(filenameIndexAp.str(), std::ios_base::in);
         if (!inFile.is_open ()) 
         { 
@@ -2419,7 +2424,6 @@ main (int argc, char *argv[])
         std::cout << spectrumChannel << std::endl;
         spectrumChannel->AddPropagationLossModel (propagationPathlossMatrix);
     }
-
     //Setting up routing
     uint32_t ifaceId = 1;
     if (enableNr && numNruPairs != 0)
@@ -2432,7 +2436,6 @@ main (int argc, char *argv[])
         }
         ifaceId++;
     }
-
     NodeContainer wifiStaNodesAlt[numWifiPairs];
     NodeContainer wifiApNodesAlt[numWifiPairs];
     Ipv4InterfaceContainer ueIpIfaceOperatorWifiAlt[numWifiPairs];
@@ -2442,7 +2445,6 @@ main (int argc, char *argv[])
         wifiApNodesAlt[i].Add (wifiApNodes.Get (i));
         ueIpIfaceOperatorWifiAlt[i].Add(ueIpIfaceOperatorWifi.Get (i));
     }   
-
     ApplicationContainer clientAppsWifi, clientAppsNru, serverAppsNru, serverAppsWifi;
     ApplicationContainer pingApps;
     double ftpLambda = 5;
@@ -2510,18 +2512,15 @@ main (int argc, char *argv[])
         newUeNodes.Add(ueNodes[i].Get (0)); 
         newIpIface.Add(ueIpIfaceOperatorNru[i].Get (0)); 
     }
-
     Simulator::Schedule (MilliSeconds(0), &GiveThroughputAlt, &flowHelper, monitor, numNruPairs);
     Simulator::Schedule (MilliSeconds(0), &GiveRxPower, newGnbNodes, newUeNodes, propagationPathlossMatrix);
     Simulator::Schedule (MilliSeconds(0), &GiveAirTime);
     Simulator::Schedule (MilliSeconds(0), &ChangeMacTypeAlt);
     Simulator::Schedule (MilliSeconds(0), &ScheduleNextStateRead);
     Simulator::Schedule (MilliSeconds(0), &UpdateMacParameters, wifiApNodes, baselineMode);
-
     Simulator::Stop (Seconds (simTime));
 
     Simulator::Run ();
-
     //manager.Close ();
 
     time_t t = time (nullptr);
@@ -2534,7 +2533,6 @@ main (int argc, char *argv[])
     std::string summaryFileName_th = outputDirectory + "ns3eval_summary_th.txt";
     std::string summaryFileName_delay = outputDirectory + "ns3eval_summary_delay.txt";
     std::string summaryFileName_airtime = outputDirectory + "ns3eval_summary_airtime.txt";
-
     if (!(fileExists(summaryFileName_th)))
     {
         outputFileSummary_th.open(summaryFileName_th);
@@ -2562,7 +2560,6 @@ main (int argc, char *argv[])
         outputFileSummary_airtime.open(summaryFileName_airtime, std::ios::in | std::ios::out);
         outputFileSummary_airtime.seekp(0, std::ios::end);
     }
-    
     if(isEvaluation)
     {
         outputFile.open(outputFileName);

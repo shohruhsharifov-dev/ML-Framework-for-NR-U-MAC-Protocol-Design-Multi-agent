@@ -18,20 +18,283 @@
 #include "ns3/point-to-point-module.h"
 #include <fstream>
 
+#include "ns3/ai-module.h"
+#include "nr-rl-env.h"
+
+NS_LOG_COMPONENT_DEFINE("NrRlExample");
+
 using namespace ns3;
+
+Ptr<OpenGymInterface> g_openGymInterface;
+Ptr<NrRlEnv> g_env;
+uint32_t g_numAps = 6;
+uint32_t maxNodes = 6;
+Time g_timeStep = MilliSeconds(100);
+std::vector<double> g_airTime (maxNodes);
+std::vector<Time> g_nrOccupancyOld (maxNodes);
+std::vector<Time> g_nrOccupancy (maxNodes);
+std::vector<bool> g_nrIsOccupying (maxNodes);
+std::vector<bool> g_firstIterationUdp(maxNodes);
+std::vector<bool> g_firstIterationBurst(maxNodes);
+std::vector<double> g_ueRxPower(maxNodes);
+
+bool g_connect = false;
+
+
+//Rewards
+std::vector<std::pair<uint32_t, double>> g_throughput(maxNodes);
+std::vector<std::pair<uint32_t, double>> g_delay(maxNodes);
+std::vector<std::pair<uint32_t, double>> g_jitter(maxNodes);
+
+std::vector<double> g_throughputDiff(maxNodes);
+std::vector<double> g_jitterDiff(maxNodes);
+std::vector<double> g_delayDiff(maxNodes);
+
+
+std::vector<uint32_t> g_mcs(maxNodes);
+std::vector<double> g_txPower(maxNodes);
+std::vector<uint32_t> g_numerology(maxNodes);
+
+
+void 
+CreateEnv()
+{
+    // std::cout << "Debug CreateEnv()" << std::endl;
+    Ptr<NrRlTimeStepEnv> env;
+    env = CreateObject<NrRlTimeStepEnv>(g_numAps);
+    g_env = env;
+}
+
+void ScheduleNextStateRead ()
+{
+    g_env->ScheduleNextStateRead();
+}
+
+void
+GiveAirTime ()
+{
+    for (uint32_t i = 0; i < g_airTime.size(); i++)
+    {
+        g_airTime[i] = g_nrOccupancy[i].GetMilliSeconds() - g_nrOccupancyOld[i].GetMilliSeconds();
+        g_env->GiveAirTime (g_airTime[i],i);
+        g_airTime[i] = 0; //reset
+    }
+    g_nrOccupancyOld = g_nrOccupancy;
+
+    Simulator::Schedule (g_timeStep, &GiveAirTime);
+}
+
+void
+ChangeRlTypeAlt()
+{
+  if (!g_connect)
+  {
+    g_connect = true;
+    CreateEnv();
+  }
+  for (uint16_t i = 0; i < g_airTime.size(); i++)
+  {
+    // std::cout << "ChangeMacType() new Mac parameters with iteration = i " << i << ": " << std::endl;
+    double newTxPower = g_env->ChangeTxPower(g_txPower[i],i);
+    uint32_t newMcs = g_env->ChangeMcs(g_mcs[i],i);
+    uint16_t newNumerology = g_env->ChangeNumerology(g_numerology[i],i);
+    g_txPower[i] = newTxPower;
+    g_mcs[i] = newMcs;
+    g_numerology[i] = newNumerology;
+  }
+  
+  Simulator::Schedule (g_timeStep, &ChangeRlTypeAlt);
+}
+
+void
+GiveThroughputAlt (FlowMonitorHelper *flowHelper, Ptr<FlowMonitor> flowMonitor, uint32_t numNrPairs)
+{
+    if(!g_connect)
+    {
+        g_connect = true;
+        CreateEnv();
+    }
+    
+    flowMonitor->SetAttribute("DelayBinWidth", DoubleValue(0.001));
+    flowMonitor->SetAttribute("JitterBinWidth", DoubleValue(0.001));
+    flowMonitor->SetAttribute("PacketSizeBinWidth", DoubleValue(20));
+
+    flowMonitor->CheckForLostPackets();
+
+    Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowHelper->GetClassifier ());
+    std::map<FlowId, FlowMonitor::FlowStats> stats = flowMonitor->GetFlowStats ();
+
+    uint32_t vecNum = 0;
+    std::vector<std::pair<uint32_t, double>> newThroughput(numNrPairs);
+    std::vector<std::pair<uint32_t, double>> newJitter(numNrPairs);
+    std::vector<std::pair<uint32_t, double>> newDelay(numNrPairs);
+
+    for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i = stats.begin (); i != stats.end (); ++i)
+    {
+        if (vecNum >= numNrPairs) break; // prevent overflow
+    auto t = classifier->FindFlow(i->first);
+    if (i->second.rxPackets > 1)
+    {
+        double throughputMbps = i->second.rxBytes * 8.0 / g_timeStep.GetSeconds() / 1e6;
+        double delayMs = i->second.delaySum.GetMilliSeconds() / i->second.rxPackets;
+        newThroughput[vecNum] = {t.destinationAddress.Get(), throughputMbps};
+        newDelay[vecNum] = {t.destinationAddress.Get(), delayMs};
+        newJitter[vecNum] = {t.destinationAddress.Get(), 0.0};
+    }
+    vecNum++;
+}
+newThroughput.resize(vecNum);
+newDelay.resize(vecNum);
+newJitter.resize(vecNum);
+    
+    double throughputDiff;
+    double delayDiff;
+    double jitterDiff;
+
+    for (uint32_t k = 0; k < g_airTime.size(); k++)
+    {
+        for (uint32_t j = 0; j < newThroughput.size(); j++)
+        {
+            uint32_t throughputIp = 117440514 + k;
+            if (newThroughput[j].first == throughputIp)
+            {
+                if (g_firstIterationUdp[k])
+                {
+                    throughputDiff = newThroughput[j].second;
+                    delayDiff = newDelay[j].second;
+                    jitterDiff = newJitter[j].second;
+                    g_throughputDiff[k] = throughputDiff;
+                    g_delayDiff[k] = delayDiff;
+                    g_jitterDiff[k] = jitterDiff;
+                }
+                else 
+                {
+                    for (uint32_t i = 0; i < g_throughput.size(); i++)
+                    {
+                        if (g_throughput[i].first == throughputIp)
+                        {
+                            throughputDiff = newThroughput[j].second - g_throughput[i].second;
+                            delayDiff = newDelay[j].second - g_delay[i].second;
+                            if (delayDiff < 0)
+                            {
+                                delayDiff = newDelay[j].second;
+                            }
+                            jitterDiff = newJitter[j].second - g_jitter[i].second;
+                            g_throughputDiff[k] = throughputDiff;
+                            g_delayDiff[k] = delayDiff;
+                            g_jitterDiff[k] = jitterDiff;
+                        }
+                    }
+                }
+                g_firstIterationUdp[k] = false;
+            }
+        }
+    } 
+
+
+    for (uint32_t i = 0; i < 6; i++)
+    {    
+        g_env->GiveThroughput (g_throughputDiff[i],i);
+        g_env->GiveDelay (g_delayDiff[i],i);
+        g_throughputDiff[i] = 0; //reset
+        g_delayDiff[i] = 0;
+        g_jitterDiff[i] = 0;
+    }
+    g_throughput = newThroughput;
+    g_delay = newDelay;
+    g_jitter = newJitter;
+
+
+    Simulator::Schedule (g_timeStep, &GiveThroughputAlt, flowHelper, flowMonitor, numNrPairs);
+}
+
+void
+GiveRxPower(NodeContainer gNbNodes, NodeContainer ueNodes, Ptr<ThreeGppUmaPropagationLossModel> lossModel)
+{
+    double pathloss = 0.0;
+    double rxPower = 0.0;
+
+    // Loop over all gNBs and UEs
+    for (uint16_t i = 0; i < gNbNodes.GetN(); i++)
+    {
+        for (uint16_t j = 0; j < gNbNodes.GetN(); j++)
+        {
+            Ptr<MobilityModel> gnbMob = gNbNodes.Get(i)->GetObject<MobilityModel>();
+            Ptr<MobilityModel> ueMob  = ueNodes.Get(j)->GetObject<MobilityModel>();
+
+            double txPowerDbm = g_txPower[i]; // or your gNB’s configured Tx power
+            double rxPowerDbm = lossModel->CalcRxPower(txPowerDbm, gnbMob, ueMob);
+
+            // Store and feed into RL environment
+            g_ueRxPower[j] = rxPowerDbm;
+            g_env->GiveRxPower(rxPowerDbm, i, j);
+
+        }
+    }
+
+    // Reschedule this function to run again after g_timeStep
+    Simulator::Schedule(g_timeStep, &GiveRxPower, gNbNodes, ueNodes, lossModel);
+}
+
+void
+UpdateRlParameters (NetDeviceContainer enbNetDev, Ptr<NrHelper> nrHelper, bool baselineMode)
+{
+    // std::cout << "Debug UpdateMacParameters()" << std::endl;
+    if(!baselineMode)
+    {
+        for (uint32_t i = 0; i < g_airTime.size(); i++)
+        {
+            // change mcs
+            Ptr<NrMacScheduler> sched = nrHelper->GetScheduler(enbNetDev.Get(i), 0);
+            sched->SetAttribute("StartingMcsDl", UintegerValue(g_mcs[i]));
+            
+            // change tx power
+            double gnbX = pow(10, g_txPower[i] / 10);
+            Ptr<NrGnbPhy> phy = nrHelper->GetGnbPhy(enbNetDev.Get(i), 0);
+            phy->SetTxPower(10 * log10(gnbX));
+            
+            // change numerology
+            //nrHelper->GetGnbPhy(enbNetDev.Get(i), 0)
+              //      ->SetAttribute("Numerology", UintegerValue(g_numerology[i]));
+
+
+            std::cout << "Time " << Simulator::Now().GetSeconds()
+                    << "s | gNB " << i
+                    << " TxPower=" << g_txPower[i]
+                    << " dBm, MCS=" << g_mcs[i]
+                    << ", Numerology=" << g_numerology[i]
+                    << std::endl;
+
+        }
+        Simulator::Schedule (g_timeStep, &UpdateRlParameters, enbNetDev, nrHelper, baselineMode);
+    }
+}
+
 
 int
 main(int argc, char* argv[])
 {
+
+    std::cout << "Starting NR RL example..." << std::endl;
+    for (uint32_t i = 0; i < maxNodes; i++)
+    {
+        g_nrIsOccupying[i] = false;
+    }    
+
     uint16_t gNbNum = 3;
     uint16_t ueNumPergNb = 5;
     uint16_t numFlowsUe = 1;
+    uint32_t numNrPairs = gNbNum * ueNumPergNb;
+    g_numAps = gNbNum;
+    uint32_t timeStep = 100;
+
 
     uint8_t numBands = 1;
     double centralFrequencyBand = 28e9;
     double bandwidthBand = 3e9;
 
     bool contiguousCc = true;
+    bool baselineMode = false;
 
     uint16_t numerology = 1; // for contiguous case
     uint8_t mcsValue = 28;
@@ -67,74 +330,52 @@ main(int argc, char* argv[])
     std::string simTag = "default";
     std::string outputDir = "./";
 
-    double simTime = 1;           // seconds
-    double udpAppStartTime = 0.4; // seconds
+    double simTime = 0.5;           // seconds
+    double udpAppStartTime = 0.1; // seconds
 
-    CommandLine cmd(__FILE__);
+    
 
-    cmd.AddValue("simTime", "Simulation time", simTime);
-    cmd.AddValue("gNbNum", "The number of gNbs in multiple-ue topology", gNbNum);
-    cmd.AddValue("ueNumPergNb", "The number of UE per gNb in multiple-ue topology", ueNumPergNb);
-    cmd.AddValue("numBands",
-                 "Number of operation bands. More than one implies non-contiguous CC",
-                 numBands);
-    cmd.AddValue("centralFrequencyBand",
-                 "The system frequency to be used in band 1",
-                 centralFrequencyBand);
-    cmd.AddValue("bandwidthBand", "The system bandwidth to be used in band 1", bandwidthBand);
-    cmd.AddValue("contiguousCc",
-                 "Simulate with contiguous CC or non-contiguous CC example",
-                 contiguousCc);
-    cmd.AddValue("numerology", "Numerlogy to be used in contiguous case", numerology);
-    cmd.AddValue("centralFrequencyCc0",
-                 "The system frequency to be used in CC 0",
-                 centralFrequencyCc0);
-    cmd.AddValue("bandwidthBand", "The system bandwidth to be used in CC 0", bandwidthCc0);
-    cmd.AddValue("centralFrequencyCc1",
-                 "The system frequency to be used in CC 1",
-                 centralFrequencyCc1);
-    cmd.AddValue("bandwidthBand", "The system bandwidth to be used in CC 1", bandwidthCc1);
-    cmd.AddValue("numerologyCc0Bwp0", "Numerlogy to be used in CC 0, BWP 0", numerologyCc0Bwp0);
-    cmd.AddValue("numerologyCc0Bwp1", "Numerlogy to be used in CC 0, BWP 1", numerologyCc0Bwp1);
-    cmd.AddValue("numerologyCc1Bwp0", "Numerlogy to be used in CC 1, BWP 0", numerologyCc1Bwp0);
-    cmd.AddValue("tddPattern",
-                 "LTE TDD pattern to use (e.g. --tddPattern=DL|S|UL|UL|UL|DL|S|UL|UL|UL|)",
-                 pattern);
-    cmd.AddValue("totalTxPower",
-                 "total tx power that will be proportionally assigned to"
-                 " bandwidth parts depending on each BWP bandwidth ",
-                 totalTxPower);
-    cmd.AddValue("cellScan",
-                 "Use beam search method to determine beamforming vector,"
-                 "true to use cell scanning method",
-                 cellScan);
-    cmd.AddValue("beamSearchAngleStep",
-                 "Beam search angle step for beam search method",
-                 beamSearchAngleStep);
-    cmd.AddValue("udpFullBuffer",
-                 "Whether to set the full buffer traffic; if this parameter is "
-                 "set then the udpInterval parameter will be neglected.",
-                 udpFullBuffer);
-    cmd.AddValue("packetSizeUll",
-                 "packet size in bytes to be used by ultra low latency traffic",
-                 udpPacketSizeUll);
-    cmd.AddValue("packetSizeBe",
-                 "packet size in bytes to be used by best effort traffic",
-                 udpPacketSizeBe);
-    cmd.AddValue("lambdaUll",
-                 "Number of UDP packets in one second for ultra low latency traffic",
-                 lambdaUll);
-    cmd.AddValue("lambdaBe",
-                 "Number of UDP packets in one second for best effor traffic",
-                 lambdaBe);
-    cmd.AddValue("logging", "Enable logging", logging);
-    cmd.AddValue("disableDl", "Disable DL flow", disableDl);
-    cmd.AddValue("disableUl", "Disable UL flow", disableUl);
-    cmd.AddValue("simTag",
-                 "tag to be appended to output filenames to distinguish simulation campaigns",
-                 simTag);
-    cmd.AddValue("outputDir", "directory where to store simulation results", outputDir);
+// cmd user inputs
+//
+//
+// ...
+//
+//
+    std::string envNumber;
+    uint32_t simRound = 0;
+    bool customEpisode = false;
+    uint32_t numAgents = 0;
+    std::string trafficType;
+    uint32_t packetSize = 0;
+    uint32_t fragmentSize = 0;
+    uint32_t udpLambda1 = 0;
+    uint32_t udpLambda2 = 0;
+    uint32_t udpLambda3 = 0;
+    uint32_t udpLambda4 = 0;
+    uint32_t udpLambda5 = 0;
+    uint32_t udpLambda6 = 0;
+    bool isEvaluation = false;
 
+    // Set up ns-3 CommandLine parser
+    CommandLine cmd;
+    cmd.AddValue("envNumber", "Shared memory segment suffix (PID)", envNumber);
+    cmd.AddValue("simTime", "Simulation time (seconds)", simTime);
+    cmd.AddValue("simRound", "Simulation run ID", simRound);
+    cmd.AddValue("customEpisode", "Use custom traffic parameters per episode", customEpisode);
+    cmd.AddValue("numAgents", "Number of DRL agents", numAgents);
+    cmd.AddValue("trafficType", "Traffic type (UDP_CBR or BURST)", trafficType);
+    cmd.AddValue("packetSize", "Packet size in bytes", packetSize);
+    cmd.AddValue("fragmentSize", "Fragment size in bytes", fragmentSize);
+    cmd.AddValue("udpLambda1", "Lambda for UDP interval (AP1)", udpLambda1);
+    cmd.AddValue("udpLambda2", "Lambda for UDP interval (AP2)", udpLambda2);
+    cmd.AddValue("udpLambda3", "Lambda for UDP interval (AP3)", udpLambda3);
+    cmd.AddValue("udpLambda4", "Lambda for UDP interval (AP4)", udpLambda4);
+    cmd.AddValue("udpLambda5", "Lambda for UDP interval (AP5)", udpLambda5);
+    cmd.AddValue("udpLambda6", "Lambda for UDP interval (AP6)", udpLambda6);
+    cmd.AddValue("isEvaluation", "Run in evaluation mode", isEvaluation);
+    cmd.AddValue("baselineMode", "Run in baseline (no RL) mode", baselineMode);
+
+    // Parse the actual arguments
     cmd.Parse(argc, argv);
 
     NS_ABORT_IF(numBands < 1);
@@ -156,13 +397,39 @@ main(int argc, char* argv[])
 
     Config::SetDefault("ns3::LteRlcUm::MaxTxBufferSize", UintegerValue(999999999));
 
+
     // create base stations and mobile terminals
     NodeContainer gNbNodes;
     NodeContainer ueNodes;
     MobilityHelper mobility;
 
+    g_openGymInterface = OpenGymInterface::Get(envNumber);
+
     double gNbHeight = 10;
     double ueHeight = 1.5;
+    g_timeStep =  MilliSeconds(timeStep);
+    g_airTime.resize(gNbNum);
+    g_nrOccupancy.resize(gNbNum);
+    g_nrOccupancyOld.resize(gNbNum);
+    g_nrIsOccupying.resize(gNbNum);
+    g_firstIterationUdp.resize(gNbNum, true);
+    g_firstIterationBurst.resize(gNbNum, true);
+    g_ueRxPower.resize(gNbNum);
+    g_throughput.resize(gNbNum);
+    g_delay.resize(gNbNum);
+    g_jitter.resize(gNbNum);
+    g_throughputDiff.resize(gNbNum);
+    g_delayDiff.resize(gNbNum);
+    g_jitterDiff.resize(gNbNum);
+    g_mcs.resize(gNbNum);
+    g_txPower.resize(gNbNum);
+    g_numerology.resize(gNbNum);
+
+    for (uint32_t i = 0; i < gNbNum; i++)
+    {
+        g_firstIterationUdp[i] = true;
+        g_firstIterationBurst[i] = true;
+    }
 
     gNbNodes.Create(gNbNum);
     ueNodes.Create(ueNumPergNb * gNbNum);
@@ -258,59 +525,7 @@ main(int argc, char* argv[])
          * ---------------CC0--------------|----------------CC1----------------
          * ------BWP0------|------BWP1-----|----------------BWP0---------------
          */
-        band.m_centralFrequency = centralFrequencyBand;
-        band.m_channelBandwidth = bandwidthBand;
-        band.m_lowerFrequency = band.m_centralFrequency - band.m_channelBandwidth / 2;
-        band.m_higherFrequency = band.m_centralFrequency + band.m_channelBandwidth / 2;
-        uint8_t bwpCount = 0;
-
-        // Component Carrier 0
-        cc0->m_ccId = 0;
-        cc0->m_centralFrequency = centralFrequencyCc0;
-        cc0->m_channelBandwidth = bandwidthCc0;
-        cc0->m_lowerFrequency = cc0->m_centralFrequency - cc0->m_channelBandwidth / 2;
-        cc0->m_higherFrequency = cc0->m_centralFrequency + cc0->m_channelBandwidth / 2;
-
-        // BWP 0
-        bwp0->m_bwpId = bwpCount;
-        bwp0->m_centralFrequency = cc0->m_lowerFrequency + 100e6;
-        bwp0->m_channelBandwidth = 200e6;
-        bwp0->m_lowerFrequency = bwp0->m_centralFrequency - bwp0->m_channelBandwidth / 2;
-        bwp0->m_higherFrequency = bwp0->m_centralFrequency + bwp0->m_channelBandwidth / 2;
-
-        cc0->AddBwp(std::move(bwp0));
-        ++bwpCount;
-
-        // BWP 01
-        bwp1->m_bwpId = bwpCount;
-        bwp1->m_centralFrequency = cc0->m_higherFrequency - 50e6;
-        bwp1->m_channelBandwidth = 100e6;
-        bwp1->m_lowerFrequency = bwp1->m_centralFrequency - bwp1->m_channelBandwidth / 2;
-        bwp1->m_higherFrequency = bwp1->m_centralFrequency + bwp1->m_channelBandwidth / 2;
-
-        cc0->AddBwp(std::move(bwp1));
-        ++bwpCount;
-
-        // Component Carrier 1
-        cc1->m_ccId = 1;
-        cc1->m_centralFrequency = centralFrequencyCc1;
-        cc1->m_channelBandwidth = bandwidthCc1;
-        cc1->m_lowerFrequency = cc1->m_centralFrequency - cc1->m_channelBandwidth / 2;
-        cc1->m_higherFrequency = cc1->m_centralFrequency + cc1->m_channelBandwidth / 2;
-
-        // BWP 2
-        bwp2->m_bwpId = bwpCount;
-        bwp2->m_centralFrequency = cc1->m_centralFrequency;
-        bwp2->m_channelBandwidth = cc1->m_channelBandwidth;
-        bwp2->m_lowerFrequency = cc1->m_lowerFrequency;
-        bwp2->m_higherFrequency = cc1->m_higherFrequency;
-
-        cc1->AddBwp(std::move(bwp2));
-        ++bwpCount;
-
-        // Add CC to the corresponding operation band.
-        band.AddCc(std::move(cc1));
-        band.AddCc(std::move(cc0));
+        
     }
     /*else
       {
@@ -370,15 +585,16 @@ main(int argc, char* argv[])
     NetDeviceContainer enbNetDev = nrHelper->InstallGnbDevice(gNbNodes, allBwps);
     NetDeviceContainer ueNetDev = nrHelper->InstallUeDevice(ueNodes, allBwps);
 
+    
+    nrHelper->SetSchedulerAttribute("FixedMcsDl", BooleanValue(true));
+
     for (uint32_t f = 0; f < enbNetDev.GetN(); ++f)
     {
         for (uint32_t bwpId = 0; bwpId < allBwps.size(); ++bwpId)
         {
         Ptr<NrMacScheduler> sched = nrHelper->GetScheduler(enbNetDev.Get(f), bwpId);
-
         // Force fixed DL/UL MCS
-        nrHelper->SetSchedulerAttribute("FixedMcsDl", BooleanValue(true));
-        nrHelper->SetSchedulerAttribute("StartingMcsDl", UintegerValue(mcsValue));
+        sched->SetAttribute("StartingMcsDl", UintegerValue(mcsValue));
         }
     }
 
@@ -587,10 +803,10 @@ main(int argc, char* argv[])
     clientApps.Stop(Seconds(simTime));
 
     // enable the traces provided by the nr module
-    nrHelper->EnableTraces();
-    Config::ConnectWithoutContext(
-        "/NodeList/*/DeviceList/*/NrGnbPhy/BeamformingTrace",
-        MakeCallback(&BeamTraceHandler));
+    //nrHelper->EnableTraces();
+    // Config::ConnectWithoutContext(
+    //   "/NodeList/*/DeviceList/*/NrGnbPhy/BeamformingTrace",
+    // MakeCallback(&BeamTraceHandler));
 
     FlowMonitorHelper flowmonHelper;
     NodeContainer endpointNodes;
@@ -602,6 +818,17 @@ main(int argc, char* argv[])
     monitor->SetAttribute("JitterBinWidth", DoubleValue(0.001));
     monitor->SetAttribute("PacketSizeBinWidth", DoubleValue(20));
 
+    Ptr<ThreeGppUmaPropagationLossModel> lossModel = CreateObject<ThreeGppUmaPropagationLossModel>(); 
+
+    lossModel->SetAttribute("Frequency", DoubleValue(centralFrequencyBand)); // Hz
+
+
+    Simulator::Schedule (MilliSeconds(0), &GiveThroughputAlt, &flowmonHelper, monitor, numNrPairs);
+    Simulator::Schedule (MilliSeconds(0), &GiveRxPower, gNbNodes, ueNodes, lossModel);
+    Simulator::Schedule (MilliSeconds(0), &GiveAirTime);
+    Simulator::Schedule (MilliSeconds(0), &ChangeRlTypeAlt);
+    Simulator::Schedule (MilliSeconds(0), &ScheduleNextStateRead);
+    Simulator::Schedule (MilliSeconds(0), &UpdateRlParameters, enbNetDev, nrHelper, baselineMode);
     Simulator::Stop(Seconds(simTime));
     Simulator::Run();
 
@@ -744,6 +971,7 @@ main(int argc, char* argv[])
     {
         std::cout << f.rdbuf();
     }
+    g_openGymInterface->NotifySimulationEnd();
 
     Simulator::Destroy();
     return 0;

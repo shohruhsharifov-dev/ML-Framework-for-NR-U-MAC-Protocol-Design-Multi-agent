@@ -919,7 +919,7 @@ void NrSingleBwpSetup::ChangeMcs (uint32_t mcsValue)
 {
   // std::cout << "Debug ChangeMcs()" << std::endl;
   for(uint32_t f=0;f < m_gnbDev.GetN(); f++)
-  { 
+  {
     if (mcsValue <= 28)
     {
       m_helper->GetScheduler (m_gnbDev.Get (f), 0)->SetAttribute("McsValue", UintegerValue(mcsValue));

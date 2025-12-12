@@ -28,7 +28,7 @@ NS_LOG_COMPONENT_DEFINE("ns3::NrRlEnv");
 NrRlEnv::NrRlEnv()
 {
   NS_LOG_FUNCTION(this);
-  //SetOpenGymInterface(OpenGymInterface::Get());
+  SetOpenGymInterface(OpenGymInterface::Get());
 }
 
 NrRlEnv::~NrRlEnv()
@@ -107,9 +107,9 @@ NrRlEnv::ExecuteActions(Ptr<OpenGymDataContainer> action)
 
   for (uint32_t i = 0; i < 6; i++)
   {
-    m_new_txPower[i] = actionBox ->GetValue (1*6+i);
-    m_new_mcs[i] = actionBox ->GetValue (2*6+i);
-    m_new_numerology[i] = actionBox ->GetValue (3*6+i);
+    m_new_txPower[i] = actionBox ->GetValue (i);
+    m_new_mcs[i] = actionBox ->GetValue (6+i);
+    m_new_numerology[i] = actionBox ->GetValue (2*6+i);
   }  
   
   NS_LOG_INFO("MyExecuteActions: " << action);
@@ -118,7 +118,7 @@ NrRlEnv::ExecuteActions(Ptr<OpenGymDataContainer> action)
   return true;
 }
 
-NrRlTimeStepEnv::NrRlTimeStepEnv (uint32_t num_ap, uint32_t trafficType, std::vector<uint32_t> udpLambda, uint32_t packetSize)
+NrRlTimeStepEnv::NrRlTimeStepEnv (uint32_t num_ap)
   : NrRlEnv()
 {
   NS_LOG_FUNCTION(this);
@@ -128,14 +128,10 @@ NrRlTimeStepEnv::NrRlTimeStepEnv (uint32_t num_ap, uint32_t trafficType, std::ve
   m_new_mcs.resize(6);
   m_new_numerology.resize(6);
 
-
   m_txPower.resize(6);
   m_mcs.resize(6);
   m_numerology.resize(6);
   
-  m_trafficType.resize(6);
-  m_packetSize.resize(6);
-  m_udpLambda.resize(6);
   
   m_rxPower.resize(6, std::vector<double>(6));
   m_throughput.resize(6);
@@ -152,28 +148,13 @@ NrRlTimeStepEnv::NrRlTimeStepEnv (uint32_t num_ap, uint32_t trafficType, std::ve
 
   for (uint32_t i = 0; i < num_ap; i++)
   {
-    m_edThreshold[i] = -62;
-    m_trafficType[i] = trafficType;
-    m_packetSize[i] = packetSize;
-    m_udpLambda[i] = udpLambda[i];
 
-    m_new_edThreshold[i] = -62;
-    m_new_udpLambda[i] = m_udpLambda[i];
-    m_new_packetSize[i] = m_packetSize[i];
-
-    m_slotTime[i] = 9;
-    m_deferTime[i] = 40;
-    m_mcot[i] = 8;
-    m_backoffType[i] = 3;
-    m_minCw[i] = 15;
     m_txPower[i] = 23;
+    m_numerology[i] = 1;
     
-    m_new_slotTime[i] = 9;
-    m_new_deferTime[i] = 40;
-    m_new_mcot[i] = 8;
-    m_new_backoffType[i] = 3;
-    m_new_minCw[i] = 15;
     m_new_txPower[i] = 23;
+    m_new_numerology[i] = 1;
+
   }
 }
 
@@ -236,6 +217,10 @@ NrRlTimeStepEnv::GetObservation()
     observationBox->AddValue(m_numerology[i]);
   }
 
+  for (uint32_t i = 0; i < 18; i++)
+  {
+      observationBox->AddValue(0);
+  }
 
   for (uint32_t i = 0; i < 6; i++)
   {
@@ -256,8 +241,11 @@ NrRlTimeStepEnv::GetObservation()
   {
     observationBox->AddValue(m_airTime[i]);
   }
-
-
+  uint32_t count = 6 + 6 + 6 + 18 + 36 + 6 + 6 + 6; // current number of added values
+  while (count < parameterNum) {
+      observationBox->AddValue(0);
+      count++;
+}
   
 
   // Print data

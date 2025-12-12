@@ -392,7 +392,7 @@ InternetStackHelper::InstallNetDevice (Ptr<NetDevice> netDevice) const
 
   if (m_ipv6Enabled)
     {
-      /* IPv6 stack 
+      // IPv6 stack 
       if (netDevice->GetObject<Ipv6> () != 0)
         {
           NS_FATAL_ERROR ("InternetStackHelper::Install (): Aggregating " 
@@ -413,7 +413,7 @@ InternetStackHelper::InstallNetDevice (Ptr<NetDevice> netDevice) const
       Ptr<Ipv6RoutingProtocol> ipv6Routing = m_routingv6->Create (netDevice);
       ipv6->SetRoutingProtocol (ipv6Routing);
 
-      /* register IPv6 extensions and options 
+      // register IPv6 extensions and options 
       ipv6->RegisterExtensions ();
       ipv6->RegisterOptions ();
     }
