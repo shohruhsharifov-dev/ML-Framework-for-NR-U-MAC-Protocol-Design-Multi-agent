@@ -8,6 +8,6 @@ URL:
 Version: 3.38
 Requires:  ns3-core
 Requires.private: 
-Cflags: -I"${includedir}" -I/usr/include -I/usr; -I/usr/include/eigen3 -I/usr/include/libxml2 -I/home/shohruh/.pyenv/versions/3.10.13/include/python3.10
+Cflags: -I"${includedir}" -I/usr/include -I/usr; -I/usr/include/eigen3 -I/usr/include/libxml2 -I/usr/include/python3.12
 Libs: -L"${libdir}" -lns3.38-ai-default  -lns3.38-core-default -lBoost::program_options -lprotobuf::libprotobuf
 Libs.private: -L"${libdir}" 

@@ -106,7 +106,7 @@ if args.sim_seed:
 
 my_sim_seed_set = np.random.randint(1,1000,size=20)
 
-my_duration = 50
+my_duration = 0.5
 if args.duration:
     my_duration = args.duration
 
@@ -263,7 +263,7 @@ try:
 
         print("Running centralized environment")
         config = (PPOConfig()
-        .training(gamma=0.9, lr=1e-3, train_batch_size = 1000, entropy_coeff = my_entropy_coeff, 
+        .training(gamma=0.9, lr=1e-3, train_batch_size = 20, sgd_minibatch_size=16, entropy_coeff = my_entropy_coeff, 
                 model={'use_lstm' : my_lstm, 
                        'max_seq_len' : my_max_seq_len,
                       }

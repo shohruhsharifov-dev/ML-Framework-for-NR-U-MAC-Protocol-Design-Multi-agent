@@ -28,7 +28,7 @@ NS_LOG_COMPONENT_DEFINE("ns3::NrRlEnv");
 NrRlEnv::NrRlEnv()
 {
   NS_LOG_FUNCTION(this);
-  SetOpenGymInterface(OpenGymInterface::Get());
+  //SetOpenGymInterface(OpenGymInterface::Get());
 }
 
 NrRlEnv::~NrRlEnv()

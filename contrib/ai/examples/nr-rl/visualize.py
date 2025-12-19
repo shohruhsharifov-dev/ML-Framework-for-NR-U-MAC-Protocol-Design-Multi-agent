@@ -1,7 +1,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-data = pd.read_csv("contrib/ai/examples/nr-rl/positions.csv")
+# data = pd.read_csv("contrib/ai/examples/nr-rl/positions.csv")
+data = pd.read_csv("positions.csv")
 
 gnb = data[data["NodeType"]=="gNB"]
 ue  = data[data["NodeType"]=="UE"]

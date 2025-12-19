@@ -333,6 +333,16 @@ set_target_properties(ns3::libpropagation PROPERTIES
 list(APPEND _cmake_import_check_targets ns3::libpropagation )
 list(APPEND _cmake_import_check_files_for_ns3::libpropagation "${_IMPORT_PREFIX}/lib/libns3.38-propagation-default.so" )
 
+# Import target "ns3::libsionna" for configuration "default"
+set_property(TARGET ns3::libsionna APPEND PROPERTY IMPORTED_CONFIGURATIONS DEFAULT)
+set_target_properties(ns3::libsionna PROPERTIES
+  IMPORTED_LOCATION_DEFAULT "${_IMPORT_PREFIX}/lib/libns3.38-sionna-default.so"
+  IMPORTED_SONAME_DEFAULT "libns3.38-sionna-default.so"
+  )
+
+list(APPEND _cmake_import_check_targets ns3::libsionna )
+list(APPEND _cmake_import_check_files_for_ns3::libsionna "${_IMPORT_PREFIX}/lib/libns3.38-sionna-default.so" )
+
 # Import target "ns3::libsixlowpan" for configuration "default"
 set_property(TARGET ns3::libsixlowpan APPEND PROPERTY IMPORTED_CONFIGURATIONS DEFAULT)
 set_target_properties(ns3::libsixlowpan PROPERTIES

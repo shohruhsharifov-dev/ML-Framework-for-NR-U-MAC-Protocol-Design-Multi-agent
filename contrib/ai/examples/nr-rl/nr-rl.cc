@@ -77,9 +77,12 @@ GiveAirTime ()
     {
         g_airTime[i] = g_nrOccupancy[i].GetMilliSeconds() - g_nrOccupancyOld[i].GetMilliSeconds();
         g_env->GiveAirTime (g_airTime[i],i);
+        // std::cout << "Airtime "<< g_airTime[i] << ", " << i << ": " << std::endl;
         g_airTime[i] = 0; //reset
+
     }
     g_nrOccupancyOld = g_nrOccupancy;
+
 
     Simulator::Schedule (g_timeStep, &GiveAirTime);
 }
@@ -132,21 +135,21 @@ GiveThroughputAlt (FlowMonitorHelper *flowHelper, Ptr<FlowMonitor> flowMonitor, 
     for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i = stats.begin (); i != stats.end (); ++i)
     {
         if (vecNum >= numNrPairs) break; // prevent overflow
-    auto t = classifier->FindFlow(i->first);
-    if (i->second.rxPackets > 1)
-    {
-        double throughputMbps = i->second.rxBytes * 8.0 / g_timeStep.GetSeconds() / 1e6;
-        double delayMs = i->second.delaySum.GetMilliSeconds() / i->second.rxPackets;
-        newThroughput[vecNum] = {t.destinationAddress.Get(), throughputMbps};
-        newDelay[vecNum] = {t.destinationAddress.Get(), delayMs};
-        newJitter[vecNum] = {t.destinationAddress.Get(), 0.0};
+        auto t = classifier->FindFlow(i->first);
+        if (i->second.rxPackets > 1)
+        {
+            double throughputMbps = i->second.rxBytes * 8.0 / g_timeStep.GetSeconds() / 1e6;
+            double delayMs = i->second.delaySum.GetMilliSeconds() / i->second.rxPackets;
+            newThroughput[vecNum] = {t.destinationAddress.Get(), throughputMbps};
+            newDelay[vecNum] = {t.destinationAddress.Get(), delayMs};
+            newJitter[vecNum] = {t.destinationAddress.Get(), 0.0};
+        }
+        vecNum++;
     }
-    vecNum++;
-}
-newThroughput.resize(vecNum);
-newDelay.resize(vecNum);
-newJitter.resize(vecNum);
-    
+    newThroughput.resize(vecNum);
+    newDelay.resize(vecNum);
+    newJitter.resize(vecNum);
+        
     double throughputDiff;
     double delayDiff;
     double jitterDiff;
@@ -183,6 +186,9 @@ newJitter.resize(vecNum);
                             g_throughputDiff[k] = throughputDiff;
                             g_delayDiff[k] = delayDiff;
                             g_jitterDiff[k] = jitterDiff;
+                            std::cout << "Throughput diff agent " << k << " : " << g_throughputDiff[k] << std::endl;
+                            std::cout << "Delay diff agent " << k << " : " << g_delayDiff[k] << std::endl;
+
                         }
                     }
                 }
@@ -228,6 +234,8 @@ GiveRxPower(NodeContainer gNbNodes, NodeContainer ueNodes, Ptr<ThreeGppUmaPropag
             // Store and feed into RL environment
             g_ueRxPower[j] = rxPowerDbm;
             g_env->GiveRxPower(rxPowerDbm, i, j);
+            //std::cout << "RxPower for Gnb "<< i << ", UE " << j << ": " << rxPowerDbm << std::endl;
+
 
         }
     }
@@ -258,12 +266,12 @@ UpdateRlParameters (NetDeviceContainer enbNetDev, Ptr<NrHelper> nrHelper, bool b
               //      ->SetAttribute("Numerology", UintegerValue(g_numerology[i]));
 
 
-            std::cout << "Time " << Simulator::Now().GetSeconds()
-                    << "s | gNB " << i
-                    << " TxPower=" << g_txPower[i]
-                    << " dBm, MCS=" << g_mcs[i]
-                    << ", Numerology=" << g_numerology[i]
-                    << std::endl;
+            //std::cout << "Time " << Simulator::Now().GetSeconds()
+              //      << "s | gNB " << i
+                //    << " TxPower=" << g_txPower[i]
+                  //  << " dBm, MCS=" << g_mcs[i]
+                    //<< ", Numerology=" << g_numerology[i]
+                    //<< std::endl;
 
         }
         Simulator::Schedule (g_timeStep, &UpdateRlParameters, enbNetDev, nrHelper, baselineMode);
@@ -840,6 +848,7 @@ main(int argc, char* argv[])
     */
 
     // Print per-flow statistics
+    /*
     monitor->CheckForLostPackets();
     Ptr<Ipv4FlowClassifier> classifier =
         DynamicCast<Ipv4FlowClassifier>(flowmonHelper.GetClassifier());
@@ -970,7 +979,7 @@ main(int argc, char* argv[])
     if (f.is_open())
     {
         std::cout << f.rdbuf();
-    }
+    }*/
     g_openGymInterface->NotifySimulationEnd();
 
     Simulator::Destroy();

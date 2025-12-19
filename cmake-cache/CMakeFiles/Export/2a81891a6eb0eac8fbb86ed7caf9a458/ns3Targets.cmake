@@ -19,7 +19,7 @@ set(CMAKE_IMPORT_FILE_VERSION 1)
 set(_cmake_targets_defined "")
 set(_cmake_targets_not_defined "")
 set(_cmake_expected_targets "")
-foreach(_cmake_expected_target IN ITEMS ns3::libai ns3::libvr-app ns3::libantenna ns3::libaodv ns3::libapplications ns3::libbridge ns3::libbuildings ns3::libconfig-store ns3::libcore ns3::libcsma ns3::libcsma-layout ns3::libdsdv ns3::libdsr ns3::libenergy ns3::raw-sock-creator ns3::tap-device-creator ns3::libfd-net-device ns3::libflow-monitor ns3::libinternet ns3::libinternet-apps ns3::liblr-wpan ns3::liblte ns3::libmesh ns3::libmobility ns3::libnetanim ns3::libnetwork ns3::libnix-vector-routing ns3::libnr ns3::libnr-u ns3::libolsr ns3::libpoint-to-point ns3::libpoint-to-point-layout ns3::libpropagation ns3::libsixlowpan ns3::libspectrum ns3::libstats ns3::libtap-bridge ns3::tap-creator ns3::libtopology-read ns3::libtraffic-control ns3::libuan ns3::libvirtual-net-device ns3::libwave ns3::libwifi ns3::libwimax)
+foreach(_cmake_expected_target IN ITEMS ns3::libai ns3::libvr-app ns3::libantenna ns3::libaodv ns3::libapplications ns3::libbridge ns3::libbuildings ns3::libconfig-store ns3::libcore ns3::libcsma ns3::libcsma-layout ns3::libdsdv ns3::libdsr ns3::libenergy ns3::raw-sock-creator ns3::tap-device-creator ns3::libfd-net-device ns3::libflow-monitor ns3::libinternet ns3::libinternet-apps ns3::liblr-wpan ns3::liblte ns3::libmesh ns3::libmobility ns3::libnetanim ns3::libnetwork ns3::libnix-vector-routing ns3::libnr ns3::libnr-u ns3::libolsr ns3::libpoint-to-point ns3::libpoint-to-point-layout ns3::libpropagation ns3::libsionna ns3::libsixlowpan ns3::libspectrum ns3::libstats ns3::libtap-bridge ns3::tap-creator ns3::libtopology-read ns3::libtraffic-control ns3::libuan ns3::libvirtual-net-device ns3::libwave ns3::libwifi ns3::libwimax)
   list(APPEND _cmake_expected_targets "${_cmake_expected_target}")
   if(TARGET "${_cmake_expected_target}")
     list(APPEND _cmake_targets_defined "${_cmake_expected_target}")
@@ -59,7 +59,7 @@ endif()
 add_library(ns3::libai SHARED IMPORTED)
 
 set_target_properties(ns3::libai PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include;/usr/include;/usr;/usr/include/eigen3;/usr/include/libxml2;/home/shohruh/.pyenv/versions/3.10.13/include/python3.10"
+  INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include;/usr/include;/usr;/usr/include/eigen3;/usr/include/libxml2;/usr/include/python3.12"
   INTERFACE_LINK_LIBRARIES "-Wl,--no-as-needed;ns3::libcore;Boost::program_options;protobuf::libprotobuf;-Wl,--as-needed"
 )
 
@@ -307,6 +307,14 @@ add_library(ns3::libpropagation SHARED IMPORTED)
 set_target_properties(ns3::libpropagation PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include;/usr/include;/usr;/usr/include/eigen3;/usr/include/libxml2"
   INTERFACE_LINK_LIBRARIES "-Wl,--no-as-needed;ns3::libnetwork;ns3::libmobility;-Wl,--as-needed"
+)
+
+# Create imported target ns3::libsionna
+add_library(ns3::libsionna SHARED IMPORTED)
+
+set_target_properties(ns3::libsionna PROPERTIES
+  INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include;/usr/include;/usr;/usr/include/eigen3;/usr/include/libxml2"
+  INTERFACE_LINK_LIBRARIES "-Wl,--no-as-needed;ns3::libcore;ns3::libnetwork;ns3::libmobility;-Wl,--as-needed"
 )
 
 # Create imported target ns3::libsixlowpan
